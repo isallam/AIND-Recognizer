@@ -66,6 +66,10 @@ class SelectorBIC(ModelSelector):
 
     http://www2.imm.dtu.dk/courses/02433/doc/ch6_slides.pdf
     Bayesian information criteria: BIC = -2 * logL + p * logN
+
+    p is calculated as:
+       p =  n * n + 2 * n * d - 1
+       p = num_states * num_states + 2 * num_states * len(self.X[0]) - 1
     """
 
     def select(self):
@@ -76,9 +80,27 @@ class SelectorBIC(ModelSelector):
         """
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-        # TODO implement model selection based on BIC scores
-        raise NotImplementedError
+        results = []
+        print("num of data points: ", len(self.sequences))
+        print("self.X[0]: ", self.X[0])
+        for num_states in range(self.min_n_components, self.max_n_components + 1):
+            try:
+                model = self.base_model(num_states)
+                logL = model.score(self.X, self.lengths)
+                logN = np.log(len(self.X))
+                params = num_states * num_states + 2 * num_states * len(self.X[0]) - 1
+                BIC_score = -2 * logL + params * logN
+                print("word: {}, num_states: {}, BIC: {}".format(self.this_word, num_states, BIC_score))
+                results.append((BIC_score, model))
+            except:
+                # print("Error training model for word: {} with num_states: {}".format(word, num_states))
+                pass
 
+        if results != []:
+            score, model = min(results)
+            return model
+        else:
+            return None
 
 class SelectorDIC(ModelSelector):
     ''' select best model based on Discriminative Information Criterion
@@ -104,5 +126,35 @@ class SelectorCV(ModelSelector):
     def select(self):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-        # TODO implement model selection using CV
-        raise NotImplementedError
+        split_method = KFold()
+        word = self.this_word
+        # print("Word:{}".format(word))
+        results = []
+        try:
+            cv_train_sets = []
+            for cv_train_idx, cv_test_idx in split_method.split(self.sequences):
+                cv_train_sets.append(cv_test_idx)
+            for num_states in range(self.min_n_components, self.max_n_components + 1):
+                try:
+                    scores = []
+                    for train_idx in cv_train_sets:
+                        # print("Train fold indices:{}".format(train_idx))  # view indices of the folds
+                        self.X, self.lengths = combine_sequences(train_idx, self.sequences)
+                        model = self.base_model(num_states)
+                        logL = model.score(self.X, self.lengths)
+                        scores.append(logL)
+                    avgLogLikelihood = np.average(scores)
+                    # print("Word:{}, num_states:{} => scores:{}, avg:{}".format(word, num_states, scores, avgLogLikelihood))
+                    results.append((avgLogLikelihood, model))
+                except:
+                    # print("Error training model for word: {} with num_states: {}".format(word, num_states))
+                    pass
+        except ValueError as valueError:
+            # print("Error spliting word: {} - error: {}".format(word, valueError))
+            pass
+
+        if results != []:
+            score, model = max(results)
+            return model
+        else:
+            return None
