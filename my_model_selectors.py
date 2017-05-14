@@ -67,9 +67,9 @@ class SelectorBIC(ModelSelector):
     http://www2.imm.dtu.dk/courses/02433/doc/ch6_slides.pdf
     Bayesian information criteria: BIC = -2 * logL + p * logN
 
-    p is calculated as:
-       p =  n * n + 2 * n * d - 1
-       p = num_states * num_states + 2 * num_states * len(self.X[0]) - 1
+        p is calculated as:
+           p =  n * n + 2 * n * d - 1
+           p = num_states * num_states + 2 * num_states * len(self.X[0]) - 1
     """
 
     def select(self):
@@ -81,8 +81,6 @@ class SelectorBIC(ModelSelector):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
         results = []
-        print("num of data points: ", len(self.sequences))
-        print("self.X[0]: ", self.X[0])
         for num_states in range(self.min_n_components, self.max_n_components + 1):
             try:
                 model = self.base_model(num_states)
@@ -90,7 +88,7 @@ class SelectorBIC(ModelSelector):
                 logN = np.log(len(self.X))
                 params = num_states * num_states + 2 * num_states * len(self.X[0]) - 1
                 BIC_score = -2 * logL + params * logN
-                print("word: {}, num_states: {}, BIC: {}".format(self.this_word, num_states, BIC_score))
+                # print("word: {}, num_states: {}, BIC: {}".format(self.this_word, num_states, BIC_score))
                 results.append((BIC_score, model))
             except:
                 # print("Error training model for word: {} with num_states: {}".format(word, num_states))
@@ -109,13 +107,39 @@ class SelectorDIC(ModelSelector):
     Document Analysis and Recognition, 2003. Proceedings. Seventh International Conference on. IEEE, 2003.
     http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.58.6208&rep=rep1&type=pdf
     DIC = log(P(X(i)) - 1/(M-1)SUM(log(P(X(all but i))
+
+    From some comment:
+        DIC = log(P(original word)) - average(log(P(otherwords)))
     '''
 
     def select(self):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-        # TODO implement model selection based on DIC scores
-        raise NotImplementedError
+        results = []
+        for num_states in range(self.min_n_components, self.max_n_components + 1):
+            try:
+                model = self.base_model(num_states)
+                logL_word = model.score(self.X, self.lengths)
+                logL_others = []
+                for word in self.words:
+                    if word == self.this_word:
+                        continue
+                    other_word_X, other_word_lengths = self.hwords[word]
+                    logL_other_score = model.score(other_word_X, other_word_lengths)
+                    logL_others.append(logL_other_score)
+                avg_logL_others = np.average(logL_others)
+                DIC_score = logL_word - avg_logL_others
+                # print("word: {}, num_states: {}, DIC: {}".format(self.this_word, num_states, DIC_score))
+                results.append((DIC_score, model))
+            except:
+                # print("Error training model for word: {} with num_states: {}".format(word, num_states))
+                pass
+
+        if results != []:
+            score, model = max(results)
+            return model
+        else:
+            return None
 
 
 class SelectorCV(ModelSelector):
