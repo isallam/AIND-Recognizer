@@ -150,7 +150,7 @@ class SelectorCV(ModelSelector):
     def select(self):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-        split_method = KFold()
+        split_method = KFold(n_splits=min(3, len(self.lengths)))
         word = self.this_word
         # print("Word:{}".format(word))
         results = []
