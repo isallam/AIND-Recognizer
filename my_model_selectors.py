@@ -150,35 +150,51 @@ class SelectorCV(ModelSelector):
     def select(self):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-        split_method = KFold(n_splits=min(3, len(self.lengths)))
-        word = self.this_word
-        # print("Word:{}".format(word))
         results = []
-        try:
-            cv_train_sets = []
-            for cv_train_idx, cv_test_idx in split_method.split(self.sequences):
-                cv_train_sets.append(cv_test_idx)
+        num_splits = len(self.lengths)
+        ''' KFold() require splits for 2 or more, so we'll have a special case
+            for num_splits == 1 where we won't process the algorithm
+        '''
+        if num_splits == 1:
             for num_states in range(self.min_n_components, self.max_n_components + 1):
                 try:
-                    scores = []
-                    for train_idx in cv_train_sets:
-                        # print("Train fold indices:{}".format(train_idx))  # view indices of the folds
-                        self.X, self.lengths = combine_sequences(train_idx, self.sequences)
-                        model = self.base_model(num_states)
-                        logL = model.score(self.X, self.lengths)
-                        scores.append(logL)
-                    avgLogLikelihood = np.average(scores)
-                    # print("Word:{}, num_states:{} => scores:{}, avg:{}".format(word, num_states, scores, avgLogLikelihood))
-                    results.append((avgLogLikelihood, model))
+                    # print("Train fold indices:{}".format(train_idx))  # view indices of the folds
+                    model = self.base_model(num_states)
+                    logL = model.score(self.X, self.lengths)
+                    # print("Word:{}, num_states:{} => logL:{}".format(word, num_states, logL))
+                    results.append((logL, model))
                 except:
                     # print("Error training model for word: {} with num_states: {}".format(word, num_states))
                     pass
-        except ValueError as valueError:
-            # print("Error spliting word: {} - error: {}".format(word, valueError))
-            pass
+        else:
+            split_method = KFold(n_splits=min(3, len(self.lengths)))
+            word = self.this_word
+            # print("Word:{}".format(word))
+            try:
+                cv_train_sets = []
+                for cv_train_idx, cv_test_idx in split_method.split(self.sequences):
+                    cv_train_sets.append(cv_test_idx)
+                for num_states in range(self.min_n_components, self.max_n_components + 1):
+                    try:
+                        scores = []
+                        for train_idx in cv_train_sets:
+                            # print("Train fold indices:{}".format(train_idx))  # view indices of the folds
+                            self.X, self.lengths = combine_sequences(train_idx, self.sequences)
+                            model = self.base_model(num_states)
+                            logL = model.score(self.X, self.lengths)
+                            scores.append(logL)
+                        avgLogLikelihood = np.average(scores)
+                        # print("Word:{}, num_states:{} => scores:{}, avg:{}".format(word, num_states, scores, avgLogLikelihood))
+                        results.append((avgLogLikelihood, model))
+                    except:
+                        # print("Error training model for word: {} with num_states: {}".format(word, num_states))
+                        pass
+            except ValueError as valueError:
+                # print("Error spliting word: {} - error: {}".format(word, valueError))
+                pass
 
         if results != []:
-            score, model = max(results)
+            score, model = max(results, key=lambda x:x[0])
             return model
         else:
             return None
