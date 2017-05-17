@@ -170,28 +170,31 @@ class SelectorCV(ModelSelector):
             split_method = KFold(n_splits=min(3, len(self.lengths)))
             word = self.this_word
             # print("Word:{}".format(word))
-            try:
-                cv_train_sets = []
-                for cv_train_idx, cv_test_idx in split_method.split(self.sequences):
-                    cv_train_sets.append(cv_test_idx)
-                for num_states in range(self.min_n_components, self.max_n_components + 1):
-                    try:
-                        scores = []
-                        for train_idx in cv_train_sets:
-                            # print("Train fold indices:{}".format(train_idx))  # view indices of the folds
-                            self.X, self.lengths = combine_sequences(train_idx, self.sequences)
-                            model = self.base_model(num_states)
-                            logL = model.score(self.X, self.lengths)
+            for num_states in range(self.min_n_components, self.max_n_components + 1):
+                try:
+                    scores = []
+                    model = self.base_model(num_states)
+                    for cv_train_idx, cv_test_idx in split_method.split(self.sequences):
+                        # print("Train fold indices:{} Test fold indices:{}".format(cv_train_idx,
+                        #                                                           cv_test_idx))  # view indices of the folds
+                        try:
+                            train_X, train_lengths = combine_sequences(cv_train_idx, self.sequences)
+                            hmm_model = GaussianHMM(n_components=num_states, covariance_type="diag", n_iter=1000,
+                                                    random_state=self.random_state, verbose=False).fit(train_X,
+                                                                                                       train_lengths)
+                            test_X, test_lengths = combine_sequences(cv_test_idx, self.sequences)
+                            logL = model.score(test_X, test_lengths)
                             scores.append(logL)
+                        except:
+                            # print("Error training model for word: {} with num_states: {}".format(word, num_states))
+                            pass
+                    if scores:
                         avgLogLikelihood = np.average(scores)
                         # print("Word:{}, num_states:{} => scores:{}, avg:{}".format(word, num_states, scores, avgLogLikelihood))
                         results.append((avgLogLikelihood, model))
-                    except:
-                        # print("Error training model for word: {} with num_states: {}".format(word, num_states))
-                        pass
-            except ValueError as valueError:
-                # print("Error spliting word: {} - error: {}".format(word, valueError))
-                pass
+                except ValueError as valueError:
+                    # print("Error evaluating model for num_states: {} and word: {} - error: {}".format(num_states, word, valueError))
+                    pass
 
         if results != []:
             score, model = max(results, key=lambda x:x[0])
